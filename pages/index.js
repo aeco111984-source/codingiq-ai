@@ -1,104 +1,243 @@
-/**
- * CodingIQ.ai — ATTL Full-File Rebuilder (Stable MVP)
- * Uses GPT-5.1-mini for consistent HTML output inside CodingIQ cockpit.
- */
+import { useState } from "react";
 
-import OpenAI from "openai";
+/*
+  CodingIQ.ai — Builder v1.3
+  Andrew + ATTL private cockpit
 
-export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed. Use POST." });
-  }
+  Core ideas:
+  • Natural language commands
+  • AiQcoding+ laws: full-file replacement, snapshot safety, Plan → Confirm → Build → Refine
+  • AI proposes → you approve → system applies
+  • All code changes go through /api/ai, which applies the AAiOS + AiQcoding+ system prompt
 
-  const { command, currentHtml } = req.body || {};
+  NOTE:
+  This file handles UI + local state + snapshots.
+  All intelligence lives in /api/ai.js where we call OpenAI with ATTL brain.
+*/
 
-  if (!command || !currentHtml) {
-    return res.status(400).json({
-      error: "Missing command or currentHtml.",
-    });
-  }
+export default function Home() {
+  // Single-project state for MVP
+  const [project, setProject] = useState({
+    name: "My Site",
+    html: `<section class="block">
+      <h1>CodingIQ.ai</h1>
+      <p>Type what you want and ATTL will help you build it.</p>
+    </section>`,
+    snapshots: []
+  });
 
-  if (!process.env.OPENAI_API_KEY) {
-    return res
-      .status(500)
-      .json({ error: "Missing OPENAI_API_KEY environment variable." });
-  }
-
-  try {
-    const client = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-    });
-
-    // ===== AAiOS / ATTL System Brain =====
-    const SYSTEM = `
-You are ATTL — the AAiOS coding engine inside CodingIQ.ai.
-This is a private AI–human coding sandbox for building full websites.
-
-MODES (ALWAYS ACTIVE)
-- C-MODE: clarity-first, no filler.
-- AiQ+C: clean, modular, readable code.
-- SBBBFF: Simple Before Brilliant Before Fast Forever.
-- LOI: truth-first, no hallucinations, no guessing.
-- Anti-Drift: stay aligned with user request.
-- Full-file Mode: ALWAYS output full HTML pages.
-
-RULES FOR OUTPUT:
-- ALWAYS return a full HTML document (no partial fragments).
-- Must include:
-  <!DOCTYPE html>
-  <html>
-  <head>...</head>
-  <body>...</body>
-  </html>
-- MUST be self-contained (inline CSS allowed).
-- NO markdown.
-- NO code fences.
-- NO commentary.
-- NO explanations.
-- Return HTML ONLY.
-`.trim();
-
-    const USER = `
-Current HTML (to be fully replaced):
-
-${currentHtml}
-
-User command:
-"${command}"
-
-Rebuild the entire HTML page from scratch.
-Return ONLY the full HTML document.
-`.trim();
-
-    // ===== GPT-5.1-mini CALL (Stable & Fast) =====
-    const completion = await client.chat.completions.create({
-      model: "gpt-5.1-mini",
-      temperature: 0.1,
-      messages: [
-        { role: "system", content: SYSTEM },
-        { role: "user", content: USER },
-      ],
-      // No max_tokens — let the model output freely without truncation.
-    });
-
-    const html = completion.choices?.[0]?.message?.content?.trim() || "";
-
-    if (!html) {
-      return res.status(500).json({
-        error: "AI returned empty HTML.",
-      });
+  const [input, setInput] = useState("");
+  const [log, setLog] = useState([
+    {
+      from: "system",
+      text:
+        "CodingIQ builder ready. Describe the change (e.g. 'Build a 3-tab FX site with blue and white theme')."
     }
+  ]);
 
-    return res.status(200).json({
-      html,
-      info: "ATTL rebuilt a full HTML page.",
-    });
-  } catch (err) {
-    console.error("ATTL Full-File Rebuild Error:", err);
+  const [pending, setPending] = useState(null);
+  const [loading, setLoading] = useState(false);
 
-    return res.status(500).json({
-      error: "ATTL API route failure.",
-      details: err?.message || String(err),
-    });
+  // Save a snapshot before applying a change
+  function saveSnapshot(label = "Before change") {
+    setProject(prev => ({
+      ...prev,
+      snapshots: [
+        ...prev.snapshots,
+        {
+          html: prev.html,
+          label,
+          time: new Date().toLocaleTimeString()
+        }
+      ]
+    }));
   }
+
+  function restoreSnapshot(index) {
+    const snap = project.snapshots[index];
+    if (!snap) return;
+    setProject(prev => ({
+      ...prev,
+      html: snap.html
+    }));
+    setLog(prev => [
+      ...prev,
+      { from: "system", text: `Restored snapshot: ${snap.label}` }
+    ]);
+  }
+
+  function forkProject() {
+    const forkName = `${project.name} (Fork at ${new Date().toLocaleTimeString()})`;
+    setLog(prev => [
+      ...prev,
+      { from: "system", text: `Forked project: ${forkName}` }
+    ]);
+    // For MVP, we only log the fork. Later we can store separate project instances.
+  }
+
+  async function applyPending() {
+    if (!pending) return;
+    // For MVP, pending.html is already the full new HTML (AiQcoding+ full-file law).
+    saveSnapshot("Before APPLY");
+    setProject(prev => ({
+      ...prev,
+      html: pending.html
+    }));
+    setLog(prev => [
+      ...prev,
+      { from: "system", text: "Applied AI proposal (full-file update)." }
+    ]);
+    setPending(null);
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!input.trim()) return;
+
+    const text = input.trim();
+    setLog(prev => [...prev, { from: "user", text }]);
+    setInput("");
+
+    setLoading(true);
+
+    try {
+      // Call our AI route with current HTML + natural language command
+      const res = await fetch("/api/ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          command: text,
+          currentHtml: project.html
+        })
+      });
+
+      if (!res.ok) {
+        const err = await res.text();
+        setLog(prev => [
+          ...prev,
+          { from: "system", text: `Error from AI route: ${err}` }
+        ]);
+        setLoading(false);
+        return;
+      }
+
+      const data = await res.json();
+
+      if (!data || !data.html) {
+        setLog(prev => [
+          ...prev,
+          {
+            from: "system",
+            text: "AI did not return HTML. Try rephrasing your command."
+          }
+        ]);
+        setLoading(false);
+        return;
+      }
+
+      // Store pending proposal so you can CLICK APPLY
+      setPending({ html: data.html, info: data.info || "" });
+      setLog(prev => [
+        ...prev,
+        {
+          from: "system",
+          text:
+            data.info ||
+            "AI has proposed a full-page update. Review and press APPLY if you approve."
+        }
+      ]);
+    } catch (err) {
+      console.error(err);
+      setLog(prev => [
+        ...prev,
+        {
+          from: "system",
+          text: "Error calling AI. Check console / API key / Vercel logs."
+        }
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="app">
+      <header className="header">
+        <div>
+          <h1>CodingIQ.ai</h1>
+          <p className="subtitle">Private Builder — Andrew × ATTL</p>
+        </div>
+        <div className="header-actions">
+          <button onClick={forkProject}>Fork</button>
+        </div>
+      </header>
+
+      <main className="layout">
+        {/* LEFT: Commands / Log */}
+        <section className="panel left">
+          <h2>Commands</h2>
+          <div className="log">
+            {log.map((m, i) => (
+              <div key={i} className={`msg ${m.from}`}>
+                {m.text}
+              </div>
+            ))}
+            {loading && (
+              <div className="msg system">
+                ATTL is thinking (AiQcoding+ / AAiOS)… please wait.
+              </div>
+            )}
+          </div>
+
+          {pending && (
+            <div className="pending">
+              <div>Pending action — review and press APPLY to confirm.</div>
+              {pending.info && (
+                <div className="pending-info">{pending.info}</div>
+              )}
+              <button onClick={applyPending}>APPLY</button>
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="input-row">
+            <input
+              value={input}
+              placeholder="Describe a change or full site spec…"
+              onChange={e => setInput(e.target.value)}
+            />
+            <button type="submit" disabled={loading}>
+              {loading ? "…" : "OK"}
+            </button>
+          </form>
+        </section>
+
+        {/* RIGHT: Live Preview */}
+        <section className="panel right">
+          <h2>Preview</h2>
+          <iframe
+            title="preview"
+            srcDoc={project.html}
+            sandbox="allow-same-origin allow-scripts"
+          />
+        </section>
+      </main>
+
+      {/* Snapshots */}
+      <section className="snapshots">
+        <h3>Snapshots</h3>
+        {project.snapshots.length === 0 && (
+          <p className="snap-empty">
+            No snapshots yet. They’ll appear here each time you APPLY.
+          </p>
+        )}
+        {project.snapshots.map((snap, i) => (
+          <div key={i} className="snap">
+            <div>{snap.label}</div>
+            <div className="snap-time">{snap.time}</div>
+            <button onClick={() => restoreSnapshot(i)}>Restore</button>
+          </div>
+        ))}
+      </section>
+    </div>
+  );
 }

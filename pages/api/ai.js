@@ -1,95 +1,56 @@
-/**
- * CodingIQ.ai — ATTL-MAX (Full HTML Mode, Stable Vercel-Compatible)
- * File path: /pages/api/ai.js
- */
-
 import OpenAI from "openai";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed. Use POST." });
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  const { command, currentHtml } = req.body || {};
+
+  if (!command || !currentHtml) {
+    return res.status(400).json({ error: "Missing fields" });
   }
 
   try {
-    const { command, currentHtml } = req.body || {};
-
-    if (!command || !currentHtml) {
-      return res.status(400).json({
-        error: "Missing command or currentHtml.",
-      });
-    }
-
     const client = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
+      apiKey: process.env.OPENAI_API_KEY
     });
 
-    // STRONG FULL HTML + STRICT JSON GUARANTEE
-    const SYSTEM = `
-You are ATTL inside CodingIQ.ai.
-
-RETURN STRICT JSON ONLY:
-{
-  "html": "<FULL VALID HTML DOCUMENT>",
-  "info": "Short description of what changed"
-}
-
-Rules:
-- No text outside JSON
-- No markdown
-- No backticks
-- No partial HTML
-- Always a complete <!DOCTYPE html> document
-`;
-
-    const USER = `
-Current HTML (replace fully):
-${currentHtml}
-
-User command:
-"${command}"
-
-Return the JSON object ONLY.
-`;
-
-    // ✔ Stable Completions API (Vercel-compatible)
     const completion = await client.chat.completions.create({
       model: "gpt-5.1",
-      temperature: 0.15,
-      max_completion_tokens: 2048,   // ✔ correct parameter
+      max_completion_tokens: 2048,
       messages: [
-        { role: "system", content: SYSTEM },
-        { role: "user", content: USER }
+        {
+          role: "system",
+          content: `Return ONLY JSON:
+{
+"html": "<FULL HTML>",
+"info": "<short text>"
+}
+No markdown. No backticks.`
+        },
+        {
+          role: "user",
+          content: `Current HTML:\n${currentHtml}\n\nUser command: "${command}".`
+        }
       ]
     });
 
-    const raw = completion.choices?.[0]?.message?.content?.trim() || "";
+    const text = completion.choices[0].message.content;
 
     let parsed;
     try {
-      parsed = JSON.parse(raw);
+      parsed = JSON.parse(text);
     } catch (err) {
       return res.status(500).json({
         error: "AI returned invalid JSON",
-        raw,
+        raw: text
       });
     }
 
-    if (!parsed.html) {
-      return res.status(500).json({
-        error: "AI JSON missing 'html'",
-        raw: parsed,
-      });
-    }
-
-    return res.status(200).json({
-      html: parsed.html,
-      info: parsed.info || "Updated full HTML according to your command."
-    });
+    return res.status(200).json(parsed);
 
   } catch (err) {
-    return res.status(500).json({
-      error: "ATTL-MAX API crash",
-      details: err.message,
-    });
+    return res.status(500).json({ error: "Server error", details: err.message });
   }
 }

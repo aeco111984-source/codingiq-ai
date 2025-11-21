@@ -1,23 +1,13 @@
 /**
- * CodingIQ.ai — ATTL-MAX route (Full HTML + JSON)
+ * CodingIQ.ai — ATTL-MAX (Full HTML Mode, Stable Vercel-Compatible)
  * File path: /pages/api/ai.js
  */
 
 import OpenAI from "openai";
 
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed. Use POST." });
-  }
-
-  if (!process.env.OPENAI_API_KEY) {
-    return res
-      .status(500)
-      .json({ error: "Missing OPENAI_API_KEY environment variable." });
   }
 
   try {
@@ -29,43 +19,47 @@ export default async function handler(req, res) {
       });
     }
 
+    const client = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
+
+    // STRONG FULL HTML + STRICT JSON GUARANTEE
     const SYSTEM = `
 You are ATTL inside CodingIQ.ai.
 
-You MUST ALWAYS return STRICT JSON:
-
+RETURN STRICT JSON ONLY:
 {
-  "html": "<FULL VALID HTML DOCUMENT HERE>",
+  "html": "<FULL VALID HTML DOCUMENT>",
   "info": "Short description of what changed"
 }
 
 Rules:
+- No text outside JSON
 - No markdown
 - No backticks
-- No text before or after the JSON
-- No partial HTML. Always a full <!DOCTYPE html> page.
+- No partial HTML
+- Always a complete <!DOCTYPE html> document
 `;
 
     const USER = `
-Current HTML (to be fully replaced):
-
+Current HTML (replace fully):
 ${currentHtml}
 
 User command:
-
 "${command}"
 
-Rebuild the page as a complete HTML document and return ONLY the JSON object described above.
+Return the JSON object ONLY.
 `;
 
+    // ✔ Stable Completions API (Vercel-compatible)
     const completion = await client.chat.completions.create({
       model: "gpt-5.1",
       temperature: 0.15,
-      max_completion_tokens: 2048,
+      max_completion_tokens: 2048,   // ✔ correct parameter
       messages: [
         { role: "system", content: SYSTEM },
-        { role: "user", content: USER },
-      ],
+        { role: "user", content: USER }
+      ]
     });
 
     const raw = completion.choices?.[0]?.message?.content?.trim() || "";
@@ -75,31 +69,27 @@ Rebuild the page as a complete HTML document and return ONLY the JSON object des
       parsed = JSON.parse(raw);
     } catch (err) {
       return res.status(500).json({
-        error: "AI returned invalid JSON.",
+        error: "AI returned invalid JSON",
         raw,
       });
     }
 
-    if (!parsed.html || typeof parsed.html !== "string") {
+    if (!parsed.html) {
       return res.status(500).json({
-        error: "AI JSON missing 'html' field.",
+        error: "AI JSON missing 'html'",
         raw: parsed,
       });
     }
 
-    const info =
-      typeof parsed.info === "string" && parsed.info.trim().length > 0
-        ? parsed.info
-        : "Updated full HTML according to your command.";
-
     return res.status(200).json({
       html: parsed.html,
-      info,
+      info: parsed.info || "Updated full HTML according to your command."
     });
+
   } catch (err) {
     return res.status(500).json({
-      error: "ATTL-MAX API crash.",
-      details: err?.message || String(err),
+      error: "ATTL-MAX API crash",
+      details: err.message,
     });
   }
 }

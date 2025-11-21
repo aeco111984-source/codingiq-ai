@@ -33,46 +33,37 @@ RULE: ALWAYS return STRICT JSON:
   "info": "short explanation of change"
 }
 
-ABSOLUTELY NO:
+NO:
 - Markdown
 - Backticks
 - Raw HTML outside JSON
-- Commentary
-- Text before/after JSON
-- Partial components (no sections only!)
+- Commentary before/after JSON
+- Partial components
 
-You ALWAYS return a **full HTML page** including:
+You ALWAYS return a full HTML document:
 <!DOCTYPE html>
 <html>
-<head> ... </head>
-<body> ... </body>
+<head>...</head>
+<body>...</body>
 </html>
 
-HTML REQUIREMENTS:
-- Mobile responsive
-- No external scripts
-- Clean, stable, readable
-- Self-contained CSS allowed in <style> inside <head>
-- Must render correctly in an iframe
-- No Tailwind unless explicitly asked
-- No remote dependencies
-- Must NOT contain JSON-breaking characters
-
-AiQcoding+ Full-File Law:
-- Every update is a full rebuild of the ENTIRE HTML file
-- Must always be consistent and valid
-- Do not reuse broken styles from input
+HTML must be:
+- Stable
+- Clean
+- Responsive
+- iPhone-safe
+- Inline CSS allowed
 `;
 
     const USER = `
 Current site HTML (full replacement target):
 ${currentHtml}
 
-User command (full-site change request):
+User command:
 "${command}"
 
-Your job: produce the full HTML document that matches the command.
-Return JSON ONLY. 
+Your job: produce the FULL HTML page.
+Return ONLY JSON.
 `;
 
     const response = await client.chat.completions.create({
@@ -82,7 +73,7 @@ Return JSON ONLY.
         { role: "system", content: SYSTEM },
         { role: "user", content: USER },
       ],
-      max_tokens: 4096,
+      max_completion_tokens: 4096
     });
 
     const raw = response.choices?.[0]?.message?.content || "";
@@ -101,7 +92,7 @@ Return JSON ONLY.
     // --- VALIDATE -------------------------
     if (!parsed.html || typeof parsed.html !== "string") {
       return res.status(500).json({
-        error: "AI JSON missing 'html' field.",
+        error: "AI JSON missing 'html'.",
         raw: parsed,
       });
     }

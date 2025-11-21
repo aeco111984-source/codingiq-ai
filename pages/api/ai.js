@@ -1,13 +1,23 @@
 /**
- * CodingIQ.ai — ATTL-MAX Hybrid Route (Full HTML Mode, Responses API)
+ * CodingIQ.ai — ATTL-MAX route (Full HTML + JSON)
  * File path: /pages/api/ai.js
  */
 
 import OpenAI from "openai";
 
+const client = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed. Use POST." });
+  }
+
+  if (!process.env.OPENAI_API_KEY) {
+    return res
+      .status(500)
+      .json({ error: "Missing OPENAI_API_KEY environment variable." });
   }
 
   try {
@@ -19,85 +29,77 @@ export default async function handler(req, res) {
       });
     }
 
-    const client = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-    });
-
-    // STRICT JSON + FULL HTML
     const SYSTEM = `
 You are ATTL inside CodingIQ.ai.
 
-YOU MUST ALWAYS RETURN EXACT JSON:
+You MUST ALWAYS return STRICT JSON:
+
 {
   "html": "<FULL VALID HTML DOCUMENT HERE>",
-  "info": "Short description of the change"
+  "info": "Short description of what changed"
 }
 
-NO:
-- Markdown
-- Backticks
-- Raw HTML outside JSON
-- Partial HTML
-- Commentary
-- Extra text
-
-ALWAYS output a full HTML page:
-<!DOCTYPE html>
-<html>
-<head> ... </head>
-<body> ... </body>
-</html>
+Rules:
+- No markdown
+- No backticks
+- No text before or after the JSON
+- No partial HTML. Always a full <!DOCTYPE html> page.
 `;
 
     const USER = `
-Current HTML:
+Current HTML (to be fully replaced):
+
 ${currentHtml}
 
 User command:
+
 "${command}"
 
-Return ONLY JSON with the full HTML page.
+Rebuild the page as a complete HTML document and return ONLY the JSON object described above.
 `;
 
-    // GPT-5.1 CORRECT CALL (Responses API)
-    const response = await client.responses.create({
+    const completion = await client.chat.completions.create({
       model: "gpt-5.1",
-      input: [
+      temperature: 0.15,
+      max_completion_tokens: 2048,
+      messages: [
         { role: "system", content: SYSTEM },
-        { role: "user", content: USER }
+        { role: "user", content: USER },
       ],
-      max_output_tokens: 4096
     });
 
-    const raw = response.output_text;
+    const raw = completion.choices?.[0]?.message?.content?.trim() || "";
 
     let parsed;
     try {
-      parsed = JSON.parse(raw.trim());
+      parsed = JSON.parse(raw);
     } catch (err) {
       return res.status(500).json({
-        error: "AI returned invalid JSON",
+        error: "AI returned invalid JSON.",
         raw,
       });
     }
 
-   if (!parsed.html) {
+    if (!parsed.html || typeof parsed.html !== "string") {
       return res.status(500).json({
-        error: "AI JSON missing 'html'",
+        error: "AI JSON missing 'html' field.",
         raw: parsed,
       });
     }
 
-    if (!parsed.info) {
-      parsed.info = "Updated full HTML according to your command.";
-    }
+    const info =
+      typeof parsed.info === "string" && parsed.info.trim().length > 0
+        ? parsed.info
+        : "Updated full HTML according to your command.";
 
-    return res.status(200).json(parsed);
-
+    return res.status(200).json({
+      html: parsed.html,
+      info,
+    });
   } catch (err) {
     return res.status(500).json({
-      error: "ATTL-MAX API crash",
-      details: err.message,
+      error: "ATTL-MAX API crash.",
+      details: err?.message || String(err),
     });
   }
 }

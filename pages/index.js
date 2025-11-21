@@ -1,126 +1,43 @@
 import { useState } from "react";
 
 /*
-  CodingIQ.ai — MVP v1
-  Private cockpit for Andrew + ATTL
+  CodingIQ.ai — Builder v1.3
+  Andrew + ATTL private cockpit
 
-  Features:
-  • Simple command input (natural language)
-  • AI interpreter (basic rules for now)
-  • Pending → Approve flow
-  • Snapshots (undo/restore)
-  • Fork logging (we can persist later)
-  • Live preview via iframe
+  Core ideas:
+  • Natural language commands
+  • AiQcoding+ laws: full-file replacement, snapshot safety, Plan → Confirm → Build → Refine
+  • AI proposes → you approve → system applies
+  • All code changes go through /api/ai, which applies the AAiOS + AiQcoding+ system prompt
+
+  NOTE:
+  This file handles UI + local state + snapshots.
+  All intelligence lives in /api/ai.js where we call OpenAI with ATTL brain.
 */
 
-const BASE_TEMPLATES = {
-  landing: `
-    <section class="block">
-      <h1>CodingIQ.ai</h1>
-      <p>Build and refine your site here. This is a starter landing layout.</p>
-    </section>
-  `,
-  blank: `
-    <section class="block">
-      <h1>New Project</h1>
-      <p>Start building...</p>
-    </section>
-  `,
-  fx: `
-    <section class="block">
-      <h1>FX Site</h1>
-      <p>[Converter placeholder]</p>
-    </section>
-  `
-};
-
-// Basic interpreter for now.
-// Later we wire this to real LLM logic.
-function interpretCommand(text) {
-  const t = text.toLowerCase();
-
-  if (t.includes("headline")) {
-    return {
-      type: "add",
-      html: `
-      <section class="block">
-        <h2>Headline</h2>
-        <p>Explain your core value clearly here.</p>
-      </section>
-      `
-    };
-  }
-
-  if (t.includes("about")) {
-    return {
-      type: "add",
-      html: `
-      <section class="block">
-        <h2>About</h2>
-        <p>Describe who you are, your mission, and your difference.</p>
-      </section>
-      `
-    };
-  }
-
-  if (t.includes("pricing")) {
-    return {
-      type: "add",
-      html: `
-      <section class="block">
-        <h2>Pricing</h2>
-        <ul>
-          <li>Basic</li>
-          <li>Pro</li>
-          <li>Enterprise</li>
-        </ul>
-      </section>
-      `
-    };
-  }
-
-  if (t.includes("faq")) {
-    return {
-      type: "add",
-      html: `
-      <section class="block">
-        <h2>FAQ</h2>
-        <p>Q: What does this do?<br/>A: Helps you build sites fast.</p>
-      </section>
-      `
-    };
-  }
-
-  if (t.includes("simple")) {
-    return { type: "template", template: "landing" };
-  }
-
-  if (t.includes("fx")) {
-    return { type: "template", template: "fx" };
-  }
-
-  if (t.includes("blank")) {
-    return { type: "template", template: "blank" };
-  }
-
-  return null;
-}
-
 export default function Home() {
-  // Single project for MVP
+  // Single-project state for MVP
   const [project, setProject] = useState({
     name: "My Site",
-    html: BASE_TEMPLATES.landing,
+    html: `<section class="block">
+      <h1>CodingIQ.ai</h1>
+      <p>Type what you want and ATTL will help you build it.</p>
+    </section>`,
     snapshots: []
   });
 
   const [input, setInput] = useState("");
   const [log, setLog] = useState([
-    { from: "system", text: "CodingIQ builder ready. Describe a change and press OK." }
+    {
+      from: "system",
+      text: "CodingIQ builder ready. Describe the change (e.g. 'Build a 3-tab FX site with blue and white theme')."
+    }
   ]);
-  const [pending, setPending] = useState(null);
 
-  // Save a snapshot before changes
+  const [pending, setPending] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  // Save a snapshot before applying a change
   function saveSnapshot(label = "Before change") {
     setProject(prev => ({
       ...prev,
@@ -149,66 +66,91 @@ export default function Home() {
   }
 
   function forkProject() {
-    const forkName = `${project.name} (forked at ${new Date().toLocaleTimeString()})`;
+    const forkName = `${project.name} (Fork at ${new Date().toLocaleTimeString()})`;
     setLog(prev => [
       ...prev,
       { from: "system", text: `Forked project: ${forkName}` }
     ]);
-    // In a full version, we’d store forks; for MVP we log it so nothing gets lost.
+    // For MVP, we only log the fork. Later we can store separate project instances.
   }
 
-  function applyPending() {
+  async function applyPending() {
     if (!pending) return;
+    // For MVP, pending.html is already the full new HTML (AiQcoding+ full-file law).
     saveSnapshot("Before APPLY");
-
-    if (pending.type === "add") {
-      setProject(prev => ({
-        ...prev,
-        html: prev.html + pending.html
-      }));
-      setLog(prev => [
-        ...prev,
-        { from: "system", text: "Applied: added section." }
-      ]);
-    }
-
-    if (pending.type === "template" && BASE_TEMPLATES[pending.template]) {
-      setProject(prev => ({
-        ...prev,
-        html: BASE_TEMPLATES[pending.template]
-      }));
-      setLog(prev => [
-        ...prev,
-        { from: "system", text: `Applied: switched to ${pending.template} template.` }
-      ]);
-    }
-
+    setProject(prev => ({
+      ...prev,
+      html: pending.html
+    }));
+    setLog(prev => [
+      ...prev,
+      { from: "system", text: "Applied AI proposal (full-file update)." }
+    ]);
     setPending(null);
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     if (!input.trim()) return;
 
     const text = input.trim();
     setLog(prev => [...prev, { from: "user", text }]);
+    setInput("");
 
-    const cmd = interpretCommand(text);
-    if (!cmd) {
+    setLoading(true);
+
+    try {
+      // Call our AI route with current HTML + natural language command
+      const res = await fetch("/api/ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          command: text,
+          currentHtml: project.html
+        })
+      });
+
+      if (!res.ok) {
+        const err = await res.text();
+        setLog(prev => [
+          ...prev,
+          { from: "system", text: `Error from AI route: ${err}` }
+        ]);
+        setLoading(false);
+        return;
+      }
+
+      const data = await res.json();
+
+      if (!data || !data.html) {
+        setLog(prev => [
+          ...prev,
+          { from: "system", text: "AI did not return HTML. Try rephrasing your command." }
+        ]);
+        setLoading(false);
+        return;
+      }
+
+      // Store pending proposal so you can CLICK APPLY
+      setPending({ html: data.html, info: data.info || "" });
       setLog(prev => [
         ...prev,
-        { from: "system", text: "I don't have a rule for that yet (MVP). Try: headline / about / pricing / FAQ / simple / fx / blank." }
+        {
+          from: "system",
+          text:
+            data.info ||
+            "AI has proposed a full-page update. Review and press APPLY if you approve."
+        }
       ]);
-      setInput("");
-      return;
+    } catch (err) {
+      console.error(err);
+      setLog(prev => [
+        ...prev,
+        { from: "system", text: "Error calling AI. Check console / API key / Vercel logs." }
+      ]);
+    } finally {
+      setLoading(false);
     }
-
-    setPending(cmd);
-    setLog(prev => [
-      ...prev,
-      { from: "system", text: "Proposed change — review and press APPLY if you approve." }
-    ]);
-    setInput("");
   }
 
   return (
@@ -216,7 +158,7 @@ export default function Home() {
       <header className="header">
         <div>
           <h1>CodingIQ.ai</h1>
-          <p className="subtitle">Private Builder — Andrew + ATTL</p>
+          <p className="subtitle">Private Builder — Andrew × ATTL</p>
         </div>
         <div className="header-actions">
           <button onClick={forkProject}>Fork</button>
@@ -224,7 +166,7 @@ export default function Home() {
       </header>
 
       <main className="layout">
-        {/* LEFT: Chat / Commands */}
+        {/* LEFT: Commands / Log */}
         <section className="panel left">
           <h2>Commands</h2>
           <div className="log">
@@ -233,11 +175,17 @@ export default function Home() {
                 {m.text}
               </div>
             ))}
+            {loading && (
+              <div className="msg system">
+                ATTL is thinking (AiQcoding+ / AAiOS)… please wait.
+              </div>
+            )}
           </div>
 
           {pending && (
             <div className="pending">
-              <div>Pending action — press APPLY to confirm.</div>
+              <div>Pending action — review and press APPLY to confirm.</div>
+              {pending.info && <div className="pending-info">{pending.info}</div>}
               <button onClick={applyPending}>APPLY</button>
             </div>
           )}
@@ -245,14 +193,16 @@ export default function Home() {
           <form onSubmit={handleSubmit} className="input-row">
             <input
               value={input}
-              placeholder="Describe a change…"
+              placeholder="Describe a change or full site spec…"
               onChange={e => setInput(e.target.value)}
             />
-            <button type="submit">OK</button>
+            <button type="submit" disabled={loading}>
+              {loading ? "…" : "OK"}
+            </button>
           </form>
         </section>
 
-        {/* RIGHT: Preview */}
+        {/* RIGHT: Live Preview */}
         <section className="panel right">
           <h2>Preview</h2>
           <iframe
@@ -267,7 +217,9 @@ export default function Home() {
       <section className="snapshots">
         <h3>Snapshots</h3>
         {project.snapshots.length === 0 && (
-          <p className="snap-empty">No snapshots yet. They’ll appear here after you APPLY.</p>
+          <p className="snap-empty">
+            No snapshots yet. They’ll appear here each time you APPLY.
+          </p>
         )}
         {project.snapshots.map((snap, i) => (
           <div key={i} className="snap">

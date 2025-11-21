@@ -8,7 +8,7 @@ import OpenAI from "openai";
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Only POST allowed" });
-    }
+  }
 
   try {
     const { command, currentHtml } = req.body || {};
@@ -24,7 +24,6 @@ export default async function handler(req, res) {
       apiKey: process.env.OPENAI_API_KEY,
     });
 
-    // ATTL-MAX System Instructions
     const SYSTEM = `
 You are ATTL running inside CodingIQ.ai.
 
@@ -34,12 +33,12 @@ Return ONLY JSON:
   "info": "Short description of what changed"
 }
 
-Follow AiQcoding+ full-file law.
-NEVER return markdown, backticks, or explanations outside the JSON.
+Apply AiQcoding+ full-file law.
+Never return markdown or backticks.
 `;
 
     const USER = `
-Current HTML (must be fully replaced):
+Current HTML (must be replaced):
 
 ${currentHtml}
 

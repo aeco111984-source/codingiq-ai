@@ -1,0 +1,12 @@
+{
+  "name": "codingiq-cockpit",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "vercel dev",
+    "start": "vercel dev"
+  },
+  "dependencies": {
+    "openai": "^4.67.0"
+  }
+}

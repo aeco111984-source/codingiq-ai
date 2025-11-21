@@ -1,5 +1,5 @@
 /**
- * CodingIQ.ai — ATTL-MAX Hybrid Route (Full HTML Mode, Pages Router)
+ * CodingIQ.ai — ATTL-MAX Hybrid Route (Full HTML Mode, Responses API)
  * File path: /pages/api/ai.js
  */
 
@@ -23,76 +23,67 @@ export default async function handler(req, res) {
       apiKey: process.env.OPENAI_API_KEY,
     });
 
-    // --- STRICT FULL-HTML ENFORCEMENT -----------------------
+    // STRICT JSON + FULL HTML
     const SYSTEM = `
 You are ATTL inside CodingIQ.ai.
 
-RULE: ALWAYS return STRICT JSON:
+YOU MUST ALWAYS RETURN EXACT JSON:
 {
-  "html": "<FULL VALID HTML DOCUMENT>",
-  "info": "short explanation of change"
+  "html": "<FULL VALID HTML DOCUMENT HERE>",
+  "info": "Short description of the change"
 }
 
 NO:
 - Markdown
 - Backticks
 - Raw HTML outside JSON
-- Commentary before/after JSON
-- Partial components
+- Partial HTML
+- Commentary
+- Extra text
 
-You ALWAYS return a full HTML document:
+ALWAYS output a full HTML page:
 <!DOCTYPE html>
 <html>
-<head>...</head>
-<body>...</body>
+<head> ... </head>
+<body> ... </body>
 </html>
-
-HTML must be:
-- Stable
-- Clean
-- Responsive
-- iPhone-safe
-- Inline CSS allowed
 `;
 
     const USER = `
-Current site HTML (full replacement target):
+Current HTML:
 ${currentHtml}
 
 User command:
 "${command}"
 
-Your job: produce the FULL HTML page.
-Return ONLY JSON.
+Return ONLY JSON with the full HTML page.
 `;
 
-    const response = await client.chat.completions.create({
+    // GPT-5.1 CORRECT CALL (Responses API)
+    const response = await client.responses.create({
       model: "gpt-5.1",
-      temperature: 0.15,
-      messages: [
+      input: [
         { role: "system", content: SYSTEM },
-        { role: "user", content: USER },
+        { role: "user", content: USER }
       ],
-      max_completion_tokens: 4096
+      max_output_tokens: 4096
     });
 
-    const raw = response.choices?.[0]?.message?.content || "";
+    const raw = response.output_text;
 
-    // --- PARSE JSON SAFELY -------------------------
     let parsed;
     try {
       parsed = JSON.parse(raw.trim());
     } catch (err) {
       return res.status(500).json({
-        error: "AI returned invalid JSON.",
+        error: "AI returned invalid JSON",
         raw,
       });
     }
 
-    // --- VALIDATE -------------------------
-    if (!parsed.html || typeof parsed.html !== "string") {
+   if (!parsed.html) {
       return res.status(500).json({
-        error: "AI JSON missing 'html'.",
+        error: "AI JSON missing 'html'",
         raw: parsed,
       });
     }
@@ -102,9 +93,10 @@ Return ONLY JSON.
     }
 
     return res.status(200).json(parsed);
+
   } catch (err) {
     return res.status(500).json({
-      error: "ATTL-MAX API crash.",
+      error: "ATTL-MAX API crash",
       details: err.message,
     });
   }

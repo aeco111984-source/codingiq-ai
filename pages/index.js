@@ -1,49 +1,49 @@
 import { useState } from "react";
-import Head from "next/head";
 
 /*
-  CodingIQ.ai — Builder v2.0 (C-MODE / ATTL cockpit)
+  CodingIQ.ai — Builder v2.0
+  Andrew × ATTL — AAiOS Coding Cockpit
 
-  Core principles:
-  • Natural language → Full-page HTML → Human approval (APPLY)
-  • AiQcoding+ full-file replacement + snapshot safety
-  • Zero partial patches: every change is a full new HTML proposal
-  • Anti-friction UI: centred, stable, iPhone-first, no weird zooming
-
-  Intelligence lives in:
-  • /pages/api/ai.js  (ATTL-MAX + AAiOS system prompt)
+  New features:
+  • Proposal History (view old proposals)
+  • Proposal Preview
+  • Proposal Restore (turn old proposal into pending again)
+  • Clean UI upgrade while keeping your entire MVP structure
 */
 
 export default function Home() {
-  // Single-project state for MVP
+  // Main project state
   const [project, setProject] = useState({
     name: "My Site",
-    html: `
-<section class="preview-root">
-  <main class="preview-main">
-    <h1>CodingIQ.ai</h1>
-    <p>Describe what you want and ATTL will rebuild this page for you.</p>
-    <ul>
-      <li>Example: "Make a clean FX landing page with 3 columns."</li>
-      <li>Example: "Turn this into a dark dashboard with a hero and 3 cards."</li>
-    </ul>
-  </main>
-</section>`,
+    html: `<section class="block">
+      <h1>CodingIQ.ai</h1>
+      <p>Type what you want and ATTL will help you build it.</p>
+    </section>`,
     snapshots: [],
   });
 
+  // UI State
   const [input, setInput] = useState("");
   const [log, setLog] = useState([
     {
       from: "system",
       text:
-        "CodingIQ builder ready. Describe the change (e.g. 'Build a 3-tab FX site with blue and white theme').",
+        "CodingIQ builder ready. Describe the change (e.g. 'Build a clean landing page with hero and cards').",
     },
   ]);
+
+  // Pending proposal from AI
   const [pending, setPending] = useState(null);
+
+  // Proposal history (NEW)
+  const [history, setHistory] = useState([]); // array of { html, info, command, time }
+
+  // For previewing a proposal from history
+  const [historyPreview, setHistoryPreview] = useState(null);
+
   const [loading, setLoading] = useState(false);
 
-  // Save a snapshot before applying a change
+  // Save snapshot before ANY apply
   function saveSnapshot(label = "Before change") {
     setProject((prev) => ({
       ...prev,
@@ -58,6 +58,7 @@ export default function Home() {
     }));
   }
 
+  // Restore snapshot
   function restoreSnapshot(index) {
     const snap = project.snapshots[index];
     if (!snap) return;
@@ -65,35 +66,53 @@ export default function Home() {
       ...prev,
       html: snap.html,
     }));
-    setLog((prev) => [
-      ...prev,
-      { from: "system", text: `Restored snapshot: ${snap.label}` },
-    ]);
+    setLog((prev) => [...prev, { from: "system", text: `Restored: ${snap.label}` }]);
   }
 
+  // Fork (MVP: log only)
   function forkProject() {
     const forkName = `${project.name} (Fork @ ${new Date().toLocaleTimeString()})`;
-    setLog((prev) => [
-      ...prev,
-      { from: "system", text: `Forked project: ${forkName}` },
-    ]);
-    // MVP: log only. Future: store multiple projects.
+    setLog((prev) => [...prev, { from: "system", text: `Forked project: ${forkName}` }]);
   }
 
+  // Accept pending proposal
   async function applyPending() {
     if (!pending) return;
+
     saveSnapshot("Before APPLY");
+
     setProject((prev) => ({
       ...prev,
       html: pending.html,
     }));
+
     setLog((prev) => [
       ...prev,
       { from: "system", text: "Applied AI proposal (full-file update)." },
     ]);
+
     setPending(null);
   }
 
+  // Turn a historical proposal into the active pending one
+  function restoreProposal(proposal) {
+    setPending({
+      html: proposal.html,
+      info: `Restored proposal from ${proposal.time}`,
+    });
+
+    setHistoryPreview(null);
+
+    setLog((prev) => [
+      ...prev,
+      {
+        from: "system",
+        text: `Restored proposal from history (${proposal.time}). Review + APPLY.`,
+      },
+    ]);
+  }
+
+  // MAIN SUBMIT HANDLER
   async function handleSubmit(e) {
     e.preventDefault();
     if (!input.trim()) return;
@@ -115,10 +134,7 @@ export default function Home() {
 
       if (!res.ok) {
         const err = await res.text();
-        setLog((prev) => [
-          ...prev,
-          { from: "system", text: `Error from AI route: ${err}` },
-        ]);
+        setLog((prev) => [...prev, { from: "system", text: `Error: ${err}` }]);
         setLoading(false);
         return;
       }
@@ -130,31 +146,41 @@ export default function Home() {
           ...prev,
           {
             from: "system",
-            text: "AI did not return HTML. Try rephrasing your command.",
+            text: "AI returned no HTML. Try again or simplify your request.",
           },
         ]);
         setLoading(false);
         return;
       }
 
+      const proposal = {
+        html: data.html,
+        info: data.info || "",
+        command: text,
+        time: new Date().toLocaleTimeString(),
+      };
+
+      // Store in history
+      setHistory((prev) => [...prev, proposal]);
+
+      // Make it the active pending proposal
       setPending({ html: data.html, info: data.info || "" });
+
       setLog((prev) => [
         ...prev,
         {
           from: "system",
           text:
             data.info ||
-            "AI has proposed a full-page update. Review and press APPLY if you approve.",
+            "AI generated a new full-page proposal. Review and press APPLY.",
         },
       ]);
     } catch (err) {
-      console.error(err);
       setLog((prev) => [
         ...prev,
         {
           from: "system",
-          text:
-            "Error calling AI. Check console / API key / Vercel logs if this persists.",
+          text: "API error. Check endpoint or API key.",
         },
       ]);
     } finally {
@@ -163,127 +189,115 @@ export default function Home() {
   }
 
   return (
-    <>
-      <Head>
-        <title>CodingIQ.ai — ATTL Builder</title>
-        {/* Lock zoom / left-drift as much as possible */}
-        <meta
-          name="viewport"
-          content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
-        />
-      </Head>
+    <div className="app">
+      <header className="header">
+        <div>
+          <h1>CodingIQ.ai</h1>
+          <p className="subtitle">AAiOS Coding Cockpit — Andrew × ATTL</p>
+        </div>
+        <div className="header-actions">
+          <button onClick={forkProject}>Fork</button>
+        </div>
+      </header>
 
-      <div className="app">
-        <header className="header">
-          <div className="header-main">
-            <h1>CodingIQ.ai</h1>
-            <p className="subtitle">Private Builder — Andrew × ATTL (C-MODE)</p>
-          </div>
-          <div className="header-actions">
-            <button className="btn ghost" onClick={forkProject}>
-              Fork
-            </button>
-          </div>
-        </header>
+      <main className="layout">
+        {/* LEFT: Commands / Log / Proposals */}
+        <section className="panel left">
+          <h2>Commands</h2>
 
-        <main className="layout">
-          {/* LEFT: Commands / Log */}
-          <section className="panel left">
-            <div className="panel-header">
-              <h2>Commands</h2>
-              <p className="panel-sub">
-                Describe changes. ATTL proposes. You approve. Full-file only.
-              </p>
-            </div>
-
-            <div className="log">
-              {log.map((m, i) => (
-                <div key={i} className={`msg ${m.from}`}>
-                  {m.text}
-                </div>
-              ))}
-              {loading && (
-                <div className="msg system">
-                  ATTL is thinking (AiQcoding+ / AAiOS)… please wait.
-                </div>
-              )}
-            </div>
-
-            {pending && (
-              <div className="pending">
-                <div className="pending-title">
-                  Pending proposal — review then APPLY.
-                </div>
-                {pending.info && (
-                  <div className="pending-info">{pending.info}</div>
-                )}
-                <button className="btn primary" onClick={applyPending}>
-                  APPLY
-                </button>
+          <div className="log">
+            {log.map((m, i) => (
+              <div key={i} className={`msg ${m.from}`}>
+                {m.text}
               </div>
-            )}
-
-            <form onSubmit={handleSubmit} className="input-row">
-              <input
-                value={input}
-                placeholder="Describe a change or full site spec…"
-                onChange={(e) => setInput(e.target.value)}
-              />
-              <button type="submit" disabled={loading} className="btn primary">
-                {loading ? "…" : "OK"}
-              </button>
-            </form>
-          </section>
-
-          {/* RIGHT: Live Preview */}
-          <section className="panel right">
-            <div className="panel-header">
-              <h2>Preview</h2>
-              <p className="panel-sub">
-                This is the full HTML your visitors would see.
-              </p>
-            </div>
-            <div className="preview-shell">
-              <iframe
-                title="preview"
-                srcDoc={project.html}
-                sandbox="allow-same-origin allow-scripts"
-              />
-            </div>
-          </section>
-        </main>
-
-        {/* Snapshots */}
-        <section className="snapshots">
-          <div className="snapshots-header">
-            <h3>Snapshots</h3>
-            <p className="snap-sub">
-              Stored before APPLY. Use them as safety checkpoints.
-            </p>
+            ))}
+            {loading && <div className="msg system">ATTL is thinking…</div>}
           </div>
-          {project.snapshots.length === 0 && (
-            <p className="snap-empty">
-              No snapshots yet. They’ll appear here each time you APPLY.
-            </p>
+
+          {pending && (
+            <div className="pending">
+              <div>Pending proposal — review then APPLY.</div>
+              {pending.info && <div className="pending-info">{pending.info}</div>}
+              <button onClick={applyPending}>APPLY</button>
+            </div>
           )}
-          <div className="snap-list">
-            {project.snapshots.map((snap, i) => (
-              <div key={i} className="snap">
-                <div className="snap-main">
-                  <div className="snap-label">{snap.label}</div>
-                  <div className="snap-time">{snap.time}</div>
+
+          <form onSubmit={handleSubmit} className="input-row">
+            <input
+              value={input}
+              placeholder="Describe change or full site spec…"
+              onChange={(e) => setInput(e.target.value)}
+            />
+            <button type="submit" disabled={loading}>
+              {loading ? "…" : "OK"}
+            </button>
+          </form>
+
+          {/* NEW: Proposal History */}
+          <div className="history">
+            <h3>Proposal History</h3>
+            {history.length === 0 && <p>No proposals yet.</p>}
+            {history.map((h, i) => (
+              <div key={i} className="hist-item">
+                <div>
+                  <b>{h.time}</b> — {h.command}
                 </div>
-                <button
-                  className="btn tiny"
-                  onClick={() => restoreSnapshot(i)}
-                >
-                  Restore
-                </button>
+                <div className="hist-actions">
+                  <button onClick={() => setHistoryPreview(h)}>View</button>
+                  <button onClick={() => restoreProposal(h)}>Restore</button>
+                </div>
               </div>
             ))}
           </div>
         </section>
-      </div>
-    </>
+
+        {/* RIGHT: Live Preview */}
+        <section className="panel right">
+          <h2>Preview</h2>
+          <iframe
+            title="preview"
+            srcDoc={project.html}
+            sandbox="allow-same-origin allow-scripts"
+          />
+        </section>
+      </main>
+
+      {/* Proposal Preview Modal */}
+      {historyPreview && (
+        <div className="modal">
+          <div className="modal-content">
+            <h3>Proposal from {historyPreview.time}</h3>
+            <iframe
+              title="proposal-preview"
+              srcDoc={historyPreview.html}
+              sandbox="allow-same-origin allow-scripts"
+            />
+            <div className="modal-actions">
+              <button onClick={() => restoreProposal(historyPreview)}>
+                Restore Proposal
+              </button>
+              <button onClick={() => setHistoryPreview(null)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Snapshots */}
+      <section className="snapshots">
+        <h3>Snapshots</h3>
+        {project.snapshots.length === 0 && (
+          <p className="snap-empty">
+            No snapshots yet. They appear each time you APPLY.
+          </p>
+        )}
+        {project.snapshots.map((snap, i) => (
+          <div key={i} className="snap">
+            <div>{snap.label}</div>
+            <div className="snap-time">{snap.time}</div>
+            <button onClick={() => restoreSnapshot(i)}>Restore</button>
+          </div>
+        ))}
+      </section>
+    </div>
   );
 }

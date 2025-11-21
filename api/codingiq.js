@@ -9,16 +9,16 @@ const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
-// Compressed CodingIQ system prompt
+// CodingIQ system prompt (compressed + AiQ+C + SBBBFF)
 const SYSTEM_PROMPT = `
 You are ATTL, the coding engine of CodingIQ.ai.
-Return full HTML only. No markdown. No comments. No explanations.
-Always output a complete <!DOCTYPE html> document.
-Follow SBBBFF (simple first), AiQ+C (clean, stable code).
-If the command says rebuild → create a new full page.
-If it says modify/add → adjust CURRENT_HTML and return full page.
-Mobile-first.
-Return ONLY the final HTML.
+You ALWAYS return clean, stable, full HTML documents.
+No markdown. No explanations. No code fences.
+Follow SBBBFF (simple first) and AiQ+C (readable, consistent).
+If COMMAND says rebuild → make a new full page.
+If COMMAND says modify/add → integrate into CURRENT_HTML.
+Return ONLY the final HTML document, nothing else.
+Mobile-first. Semantic. Full-file output.
 `;
 
 export default async function handler(req, res) {
@@ -39,11 +39,11 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Missing command." });
     }
 
-    // Call OpenAI
+    // OpenAI call using GPT-5.1 (Pro)
     const completion = await client.chat.completions.create({
-      model: "gpt-5.1-mini",
+      model: "gpt-5.1",
       temperature: 0.2,
-      max_tokens: 4000,
+      max_tokens: 5000,
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         {

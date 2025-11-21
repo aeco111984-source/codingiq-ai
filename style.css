@@ -42,4 +42,312 @@ body {
 .brand {
   display: flex;
   align-items: center;
-  gap: 0.4rem
+  gap: 0.4rem;
+}
+
+.logo-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 30% 30%, #9ae6ff, #4aa8ff);
+  box-shadow: 0 0 6px #4aa8ff;
+}
+
+.brand-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.status-bar {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* Layout */
+
+.layout {
+  flex: 1;
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  min-height: 0;
+}
+
+.pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-panel);
+  border-radius: 0.6rem;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  min-height: 0;
+}
+
+.pane-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.4rem 0.7rem;
+  border-bottom: 1px solid var(--border);
+  background: radial-gradient(circle at top left, #1e2338 0, #141827 45%);
+}
+
+.pane-header h2 {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.pane-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+/* Editor & preview */
+
+#editor {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: #050711;
+  color: var(--text);
+  font-family: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+  font-size: 0.78rem;
+  padding: 0.6rem 0.7rem;
+  resize: none;
+  line-height: 1.4;
+}
+
+#previewFrame {
+  flex: 1;
+  border: none;
+  background: #050711;
+}
+
+/* Buttons */
+
+.btn {
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: #101420;
+  color: var(--text);
+  font-size: 0.75rem;
+  padding: 0.2rem 0.7rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+}
+
+.btn:hover {
+  border-color: var(--accent);
+  background: #151927;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #4aa8ff, #7b5cff);
+  border-color: #4aa8ff;
+  color: #05060a;
+}
+
+.btn-primary:hover {
+  filter: brightness(1.05);
+}
+
+.btn-secondary {
+  background: #050711;
+}
+
+/* Icon button */
+
+.btn-icon {
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: #181b26;
+  color: var(--text-muted);
+  padding: 0 0.6rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.btn-icon:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+/* Command area */
+
+.command-area {
+  padding: 0.5rem;
+  border-top: 1px solid var(--border);
+  background: linear-gradient(180deg, #090b12, #05060a);
+}
+
+.command-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.3rem;
+}
+
+.command-header h2 {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+#commandInput {
+  width: 100%;
+  min-height: 60px;
+  max-height: 120px;
+  resize: vertical;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border);
+  background: #050711;
+  color: var(--text);
+  font-size: 0.8rem;
+  padding: 0.4rem 0.5rem;
+  outline: none;
+  font-family: inherit;
+}
+
+#commandInput::placeholder {
+  color: var(--text-muted);
+}
+
+/* Proposal panel */
+
+.proposal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.68);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 40;
+}
+
+.proposal.hidden {
+  display: none;
+}
+
+.proposal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 0.8rem;
+  border-bottom: 1px solid var(--border);
+  background: radial-gradient(circle at top left, #1e2338 0, #141827 45%);
+}
+
+.proposal-header h2 {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.proposal-body {
+  padding: 0.6rem;
+  background: #050711;
+}
+
+#proposalText {
+  width: 100%;
+  height: 240px;
+  border-radius: 0.4rem;
+  border: 1px solid var(--border);
+  background: #050711;
+  color: var(--text);
+  font-family: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+  font-size: 0.76rem;
+  padding: 0.5rem;
+  resize: vertical;
+}
+
+.proposal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 0.6rem 0.8rem 0.7rem;
+  border-top: 1px solid var(--border);
+  background: #0a0d16;
+}
+
+.proposal > div {
+  background: var(--bg-panel);
+  border-radius: 0.7rem;
+  border: 1px solid var(--border);
+  max-width: 900px;
+  width: 100%;
+}
+
+/* History */
+
+.history-area {
+  padding: 0.4rem 0.6rem 0.7rem;
+  border-top: 1px solid var(--border);
+  background: radial-gradient(circle at bottom, #121626 0, #05060a 45%);
+}
+
+.history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.2rem;
+}
+
+.history-header h2 {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.history-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.history-item-btn {
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: #050711;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  padding: 0.15rem 0.5rem;
+  cursor: pointer;
+}
+
+.history-item-btn:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+/* Responsive */
+
+@media (max-width: 768px) {
+  .layout {
+    flex-direction: column;
+  }
+
+  .pane {
+    min-height: 40vh;
+  }
+
+  #proposalText {
+    height: 200px;
+  }
+}

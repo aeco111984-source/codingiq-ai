@@ -1,9 +1,13 @@
 {
-  "name": "codingiq-cockpit",
-  "version": "1.0.0",
-  "private": true,
-  "type": "module",
-  "dependencies": {
-    "openai": "4.67.0"
-  }
+  "version": 2,
+  "builds": [
+    { "src": "index.html", "use": "@vercel/static" },
+    { "src": "style.css", "use": "@vercel/static" },
+    { "src": "script.js", "use": "@vercel/static" },
+    { "src": "api/codingiq.js", "use": "@vercel/node" }
+  ],
+  "routes": [
+    { "src": "/api/codingiq", "dest": "/api/codingiq.js" },
+    { "src": "/(.*)", "dest": "/index.html" }
+  ]
 }

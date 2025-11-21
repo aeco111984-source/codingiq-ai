@@ -15,7 +15,7 @@ You are ATTL, the coding engine of CodingIQ.ai.
 You ALWAYS return clean, stable, full HTML documents.
 No markdown. No explanations. No code fences.
 Follow SBBBFF (simple first) and AiQ+C (readable, consistent).
-If COMMAND says rebuild → make a new full page.
+If COMMAND says rebuild → create a new full page.
 If COMMAND says modify/add → integrate into CURRENT_HTML.
 Return ONLY the final HTML document, nothing else.
 Mobile-first. Semantic. Full-file output.
@@ -39,11 +39,11 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Missing command." });
     }
 
-    // OpenAI call using GPT-5.1 (Pro)
+    // OpenAI call using GPT-5.1 (correct token param)
     const completion = await client.chat.completions.create({
       model: "gpt-5.1",
       temperature: 0.2,
-      max_tokens: 5000,
+      max_completion_tokens: 5000,   // FIXED
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         {

@@ -1,0 +1,78 @@
+// ESM version for Vercel Serverless Functions (Node 18+)
+// Route: /api/codingiq
+// Requires OPENAI_API_KEY in Vercel → Environment Variables
+
+import OpenAI from "openai";
+
+// Create OpenAI client
+const client = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
+
+// Compressed CodingIQ system prompt
+const SYSTEM_PROMPT = `
+You are ATTL, the coding engine of CodingIQ.ai.
+Return full HTML only. No markdown. No comments. No explanations.
+Always output a complete <!DOCTYPE html> document.
+Follow SBBBFF (simple first), AiQ+C (clean, stable code).
+If the command says rebuild → create a new full page.
+If it says modify/add → adjust CURRENT_HTML and return full page.
+Mobile-first.
+Return ONLY the final HTML.
+`;
+
+export default async function handler(req, res) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Use POST." });
+  }
+
+  try {
+    // Read raw body
+    let raw = "";
+    for await (const chunk of req) raw += chunk;
+    const body = JSON.parse(raw || "{}");
+
+    const command = (body.command || "").toString();
+    const currentHtml = (body.currentHtml || "").toString();
+
+    if (!command) {
+      return res.status(400).json({ error: "Missing command." });
+    }
+
+    // Call OpenAI
+    const completion = await client.chat.completions.create({
+      model: "gpt-5.1-mini",
+      temperature: 0.2,
+      max_tokens: 4000,
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        {
+          role: "user",
+          content:
+            "COMMAND:\n" +
+            command +
+            "\n\nCURRENT_HTML:\n" +
+            currentHtml
+        }
+      ]
+    });
+
+    const response = completion.choices?.[0]?.message?.content || "";
+    const newHtml = response.trim();
+
+    if (!newHtml.toLowerCase().includes("<html")) {
+      return res.status(500).json({
+        error: "Invalid HTML returned.",
+        returned: newHtml.slice(0, 2000)
+      });
+    }
+
+    return res.status(200).json({ newHtml });
+  } catch (err) {
+    console.error("ERROR in /api/codingiq:", err);
+    return res.status(500).json({
+      error: "Server error",
+      detail: err.message
+    });
+  }
+}
